@@ -294,16 +294,57 @@ function sheetServico() {
       <label class="f">Valor cobrado<input class="input num" id="sv-valor" inputmode="decimal" placeholder="0,00"></label>
       <div class="f">Pagamento${chipsHtml("sv-pg", pg)}</div>
     </div>
-    <button class="btn primary full" id="sv-ok" disabled>Escolha um serviço</button>`, root => {
+    <button class="btn primary full" id="sv-ok" disabled>Escolha um serviço</button>
+    ${CFG.pixMercadoPago ? `<button class="btn secondary full" id="sv-pix" disabled>Cobrar no Pix (QR Code)</button>` : ""}`, root => {
     const val = root.querySelector("#sv-valor"), ok = root.querySelector("#sv-ok");
-    const upd = () => { const n = num(val.value); ok.disabled = !sel || !(n > 0); ok.textContent = sel ? "Registrar " + money(n) : "Escolha um serviço"; };
+    const pix = root.querySelector("#sv-pix");
+    const upd = () => { const n = num(val.value); ok.disabled = !sel || !(n > 0); ok.textContent = sel ? "Registrar " + money(n) : "Escolha um serviço"; if (pix) { pix.disabled = ok.disabled; pix.textContent = sel ? "Cobrar " + money(n) + " no Pix (QR Code)" : "Cobrar no Pix (QR Code)"; } };
     root.querySelectorAll(".tile").forEach(t => t.onclick = () => {
       root.querySelectorAll(".tile").forEach(x => x.setAttribute("aria-pressed", "false")); t.setAttribute("aria-pressed", "true");
       sel = lista.find(s => s.id === t.dataset.id); val.value = fmtIn(sel.preco); upd();
     });
     val.oninput = upd; bindChips(root, "sv-pg", v => { pg = v; });
     ok.onclick = () => registrarServico(sel, num(val.value), pg);
+    if (pix) pix.onclick = () => cobrarPix(sel, num(val.value));
   });
+}
+
+/* ---------- cobrança Pix (Mercado Pago) ---------- */
+let pixTimer = null;
+function pararPix() { clearInterval(pixTimer); pixTimer = null; }
+function cobrarPix(serv, valor) {
+  return ocupar(async () => {
+    const { data, error } = await sb.functions.invoke("cobrar-pix", { body: { nome: serv.nome, ref: serv.id, valor } });
+    if (error || !data || !data.qr_code) throw new Error((data && data.erro) || (error && error.message) || "pix");
+    mostrarQr(data, serv);
+  });
+}
+function mostrarQr(c, serv) {
+  openSheet(`<div class="row between"><h2>Pix · ${esc(serv.nome)}</h2><span class="pill warn" id="pix-st">Aguardando</span></div>
+    <div class="big num" style="color:var(--gold);text-align:center">${money(c.valor)}</div>
+    ${c.qr_base64 ? `<img src="data:image/png;base64,${esc(c.qr_base64)}" alt="QR Code Pix" style="width:min(70vw,260px);height:auto;align-self:center;background:#fff;padding:10px;border-radius:12px">` : ""}
+    <p class="small muted" style="text-align:center;margin:0">Peça para o cliente ler o QR Code no app do banco. Quando o pagamento cair, lança sozinho.</p>
+    <button class="btn ghost full" id="pix-copy">Copiar código Pix (copia e cola)</button>
+    <button class="btn ghost full" id="pix-cancel" style="color:var(--bad)">Cancelar cobrança</button>`, r => {
+    r.querySelector("#pix-copy").onclick = async () => {
+      try { await navigator.clipboard.writeText(c.qr_code); toast("Código copiado. Mande para o cliente."); } catch (e) { toast("Não deu para copiar neste aparelho."); }
+    };
+    r.querySelector("#pix-cancel").onclick = async () => {
+      pararPix(); await sb.from("cobrancas").update({ status: "cancelado" }).eq("id", c.id).eq("status", "pendente");
+      closeSheet(); toast("Cobrança cancelada");
+    };
+  });
+  pararPix();
+  const fim = Date.now() + 30 * 60 * 1000;
+  pixTimer = setInterval(async () => {
+    if (!document.querySelector("#pix-st") || Date.now() > fim) { pararPix(); return; }
+    const { data } = await sb.from("cobrancas").select("status").eq("id", c.id).maybeSingle();
+    if (data && data.status === "pago") {
+      pararPix(); closeSheet(); await recarregar(); toast("Pago ✓ " + serv.nome + " · " + money(c.valor));
+    } else if (data && data.status === "expirado") {
+      pararPix(); const st = document.querySelector("#pix-st"); if (st) { st.className = "pill bad"; st.textContent = "Expirou"; }
+    }
+  }, 3000);
 }
 function sheetProduto() {
   const prods = Object.values(S.produtos).sort((a, b) => a.nome.localeCompare(b.nome));
