@@ -72,7 +72,6 @@ function telaLogin(modo) {
   }
   L.innerHTML = `<main class="login" style="padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))">
     <img class="logo" src="icons/logo.png" alt="Dimas Corts">
-    <div><div class="eyebrow" style="color:var(--gold)">Caixa da barbearia</div><h1>${modo === "entrar" ? "Entrar" : "Criar conta"}</h1></div>
     <form id="lf" class="stack" novalidate>
       <label class="f">E-mail<input class="input" id="le" type="email" autocomplete="email" required></label>
       <label class="f">Senha<input class="input" id="lp" type="password" autocomplete="${modo === "entrar" ? "current-password" : "new-password"}" minlength="6" required></label>
