@@ -13,10 +13,15 @@ const addMonths = (d, n) => new Date(d.getFullYear(), d.getMonth() + n, 1);
 const MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const DIA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 const PAGS = ["Pix", "Dinheiro", "Cartão"];
+// Tabela de preços da Dimas Corts. Os marcados "a partir" têm o valor ajustável na hora de registrar.
 const DEFAULT_SERVICOS = [
-  { nome: "Corte", preco: 40 }, { nome: "Barba", preco: 30 }, { nome: "Corte + barba", preco: 60 },
-  { nome: "Pezinho", preco: 15 }, { nome: "Sobrancelha", preco: 15 }, { nome: "Corte infantil", preco: 35 }
+  { nome: "Corte", preco: 35 }, { nome: "Barba", preco: 20 }, { nome: "Cavanhaque", preco: 10 },
+  { nome: "Bigode", preco: 5 }, { nome: "Sobrancelhas", preco: 5 }, { nome: "Pigmentação", preco: 20 },
+  { nome: "Penteado", preco: 20 }, { nome: "Freestyle", preco: 5 }, { nome: "Alisante", preco: 30 },
+  { nome: "Progressiva", preco: 90 }, { nome: "Luzes", preco: 80 }, { nome: "Platinado", preco: 100 }
 ];
+// Lista provisória das primeiras versões: quem ainda estiver com ela recebe a tabela acima.
+const SERVICOS_PROVISORIOS = "Corte:40|Barba:30|Corte + barba:60|Pezinho:15|Sobrancelha:15|Corte infantil:35";
 
 /* ---------- Supabase ---------- */
 const CFG = window.CAIXA_CONFIG || {};
@@ -45,6 +50,11 @@ async function carregarTudo() {
   if (pr.error) throw pr.error; if (sv.error) throw sv.error;
   S.itens = itens;
   S.produtos = Object.fromEntries(pr.data.map(r => [r.id, prodFromRow(r)]));
+  const assinatura = sv.data.map(r => r.nome + ":" + Number(r.preco)).join("|");
+  if (sv.data.length && assinatura === SERVICOS_PROVISORIOS) {
+    await sb.from("servicos").delete().in("id", sv.data.map(r => r.id));
+    sv.data = [];
+  }
   if (!sv.data.length) {
     const { data, error } = await sb.from("servicos").insert(DEFAULT_SERVICOS.map((s, i) => ({ ...s, ordem: i }))).select();
     S.servicos = error ? [] : data.map(r => ({ id: r.id, nome: r.nome, preco: Number(r.preco) }));
@@ -184,7 +194,7 @@ async function carregarExemplos() {
     .map(([nome, preco, estoque, minimo]) => ({ nome, preco, estoque, minimo, exemplo: true }));
   const pr = await sb.from("produtos").insert(prods).select(); if (pr.error) throw pr.error;
   const svcs = S.servicos.length ? S.servicos : DEFAULT_SERVICOS;
-  const pesos = [.45, .12, .25, .08, .05, .05];
+  const pesos = [.5, .2, .05, .03, .05, .04, .03, .04, .02, .02, .01, .01];
   let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
   const pick = () => { let r = rnd(), c = 0; for (let i = 0; i < svcs.length; i++) { c += pesos[i] || .05; if (r <= c) return svcs[i]; } return svcs[0]; };
   const now = new Date(), hoje = new Date(now.getFullYear(), now.getMonth(), now.getDate()), ini = addMonths(hoje, -6);
