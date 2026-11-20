@@ -39,7 +39,7 @@ Abra o site no celular e:
 
 ## Pagamentos automáticos do Mercado Pago
 
-A função `supabase/functions/mp-sync` consulta a conta Mercado Pago a cada 2 minutos e lança no Caixa cada pagamento aprovado. Se a descrição do pagamento tiver o nome de um serviço (ex.: "Corte + barba"), ele já entra classificado; senão entra como "A classificar" e o barbeiro escolhe o serviço com um toque.
+A função `supabase/functions/mp-sync` consulta as orders da conta Mercado Pago (API de Orders) a cada 2 minutos e lança no Caixa cada order paga. Se a `external_reference` começar com o nome de um serviço (ex.: "Corte|a1b2"), ele já entra classificado; senão entra como "A classificar" e o barbeiro escolhe o serviço com um toque.
 
 Configuração:
 1. No Mercado Pago do barbeiro: [Suas integrações](https://www.mercadopago.com.br/developers/panel/app) → criar aplicação → *Credenciais de produção* → copiar o **Access Token**.
