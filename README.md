@@ -36,3 +36,13 @@ Abra o site no celular e:
 - **Relatórios:** Dia, Semana, Mês ou Semestre, com comparação com o período anterior.
 - **Produtos:** estoque, aviso de reposição e ajuste com − e +. A venda baixa o estoque e apagar o lançamento devolve.
 - **Serviços:** nomes e preços dos serviços, dados de exemplo e sair da conta.
+
+## Pagamentos automáticos do Mercado Pago
+
+A função `supabase/functions/mp-sync` consulta a conta Mercado Pago a cada 2 minutos e lança no Caixa cada pagamento aprovado. Se a descrição do pagamento tiver o nome de um serviço (ex.: "Corte + barba"), ele já entra classificado; senão entra como "A classificar" e o barbeiro escolhe o serviço com um toque.
+
+Configuração:
+1. No Mercado Pago do barbeiro: [Suas integrações](https://www.mercadopago.com.br/developers/panel/app) → criar aplicação → *Credenciais de produção* → copiar o **Access Token**.
+2. No Supabase: *Edge Functions → Secrets*, criar `MP_ACCESS_TOKEN` (o Access Token), `SYNC_SECRET` (uma senha qualquer, longa) e `CAIXA_OWNER_EMAIL` (o e-mail da conta do barbeiro no app).
+3. *Edge Functions → Deploy a new function → Via Editor*, nome `mp-sync`, colar `supabase/functions/mp-sync/index.ts`, desligar *Verify JWT* e publicar.
+4. *SQL Editor*: colar `supabase/mp-sync.sql`, trocar `CHAVE_SECRETA_DO_SYNC` pelo mesmo valor de `SYNC_SECRET` e rodar.

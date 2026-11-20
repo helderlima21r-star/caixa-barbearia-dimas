@@ -26,7 +26,7 @@ const sb = configurado ? window.supabase.createClient(CFG.supabaseUrl, CFG.supab
 /* ---------- estado ---------- */
 const S = { itens: [], produtos: {}, servicos: [], tab: "caixa", periodo: "semana", carregando: true, user: null, ocupado: false };
 
-const fromRow = r => ({ id: r.id, d: r.dia, h: r.hora, t: r.tipo === "produto" ? "p" : "s", n: r.nome, ref: r.ref, v: Number(r.valor), q: r.qtd, pg: r.pagamento, ex: r.exemplo });
+const fromRow = r => ({ id: r.id, d: r.dia, h: r.hora, t: r.tipo === "produto" ? "p" : "s", n: r.nome, ref: r.ref, v: Number(r.valor), q: r.qtd, pg: r.pagamento, ex: r.exemplo, mp: r.mp_payment_id || null });
 const prodFromRow = r => ({ id: r.id, nome: r.nome, preco: Number(r.preco), estoque: r.estoque, minimo: r.minimo, ex: r.exemplo });
 
 async function carregarTudo() {
@@ -267,7 +267,7 @@ function viewCaixa(v) {
 function itemRow(it) {
   const extra = it.t === "p" ? (it.q > 1 ? it.q + " × " + money(it.v) + " · " : "") + (it.pg || "") : (it.pg || "");
   return `<button class="item" data-id="${esc(it.id)}"><span class="h num">${esc(it.h)}</span>
-    <span style="min-width:0"><div class="n"><span class="dot ${it.t === "p" ? "p" : "s"}"></span>${esc(it.n)}</div><div class="sub">${esc(extra)}${it.ex ? " · exemplo" : ""}</div></span>
+    <span style="min-width:0"><div class="n"><span class="dot ${it.t === "p" ? "p" : "s"}"></span>${esc(it.n)}</div><div class="sub">${esc(extra)}${it.mp ? " · Mercado Pago" : ""}${it.ex ? " · exemplo" : ""}${it.n === "A classificar" ? ' <span class="pill warn">toque para classificar</span>' : ""}</div></span>
     <span class="v num">${money(total(it))}</span></button>`;
 }
 
@@ -305,6 +305,7 @@ function sheetServico() {
     ok.onclick = () => registrarServico(sel, num(val.value), pg);
   });
 }
+
 function sheetProduto() {
   const prods = Object.values(S.produtos).sort((a, b) => a.nome.localeCompare(b.nome));
   if (!prods.length) { openSheet(`<h2>Nenhum produto cadastrado</h2><p class="muted">Cadastre os produtos que você vende, com preço e estoque, na aba Produtos.</p><button class="btn primary full" id="go">Ir para Produtos</button>`, r => r.querySelector("#go").onclick = () => { closeSheet(); S.tab = "produtos"; render(); }); return; }
@@ -326,11 +327,26 @@ function sheetProduto() {
   });
 }
 function sheetItem(it) {
+  const classificar = it.t !== "p" && S.servicos.length;
   openSheet(`<h2>${esc(it.n)}</h2>
-    <p class="muted num">${esc(it.h)} · ${esc(it.pg || "")} · ${money(total(it))}${it.t === "p" ? " · " + it.q + " un." : ""}</p>
+    <p class="muted num">${esc(it.h)} · ${esc(it.pg || "")} · ${money(total(it))}${it.t === "p" ? " · " + it.q + " un." : ""}${it.mp ? " · veio do Mercado Pago" : ""}</p>
     ${it.t === "p" ? '<p class="small muted">Apagar devolve a quantidade ao estoque.</p>' : ""}
-    <div class="grid2"><button class="btn ghost" data-close>Manter</button><button class="btn danger" id="del">Apagar lançamento</button></div>`,
-    r => r.querySelector("#del").onclick = () => apagarItem(it));
+    ${classificar ? `<div class="eyebrow">${it.n === "A classificar" ? "Qual serviço foi?" : "Trocar o serviço"}</div>
+      <div class="tiles">${S.servicos.map(s => `<button class="tile" data-sid="${esc(s.id)}" aria-pressed="${s.id === it.ref}"><b>${esc(s.nome)}</b><span class="muted num">${money(s.preco)}</span></button>`).join("")}</div>` : ""}
+    <div class="grid2"><button class="btn ghost" data-close>Fechar</button><button class="btn danger" id="del">Apagar lançamento</button></div>`,
+    r => {
+      r.querySelector("#del").onclick = () => apagarItem(it);
+      r.querySelectorAll("[data-sid]").forEach(b => b.onclick = () => classificarItem(it, S.servicos.find(s => s.id === b.dataset.sid)));
+    });
+}
+function classificarItem(it, serv) {
+  if (!serv) return;
+  return ocupar(async () => {
+    const { error } = await sb.from("lancamentos").update({ nome: serv.nome, ref: serv.id }).eq("id", it.id);
+    if (error) throw error;
+    const x = S.itens.find(i => i.id === it.id); if (x) { x.n = serv.nome; x.ref = serv.id; }
+    closeSheet(); render(); toast("Classificado como " + serv.nome);
+  });
 }
 
 /* ---------- Relatórios ---------- */
