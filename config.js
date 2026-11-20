@@ -3,5 +3,5 @@
 // NUNCA coloque a chave "service_role" neste arquivo.
 window.CAIXA_CONFIG = {
   supabaseUrl: "https://lfeynrvmttpjlrpaygft.supabase.co",
-  supabaseAnonKey: "COLE_AQUI_A_CHAVE_ANON_PUBLIC"
+  supabaseAnonKey: "sb_publishable_gI0MDVSPQ2BDdACXRP36wQ_R7gGN93b"
 };
