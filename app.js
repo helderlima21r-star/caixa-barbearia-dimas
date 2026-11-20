@@ -17,7 +17,6 @@ const DEFAULT_SERVICOS = [
   { nome: "Corte", preco: 40 }, { nome: "Barba", preco: 30 }, { nome: "Corte + barba", preco: 60 },
   { nome: "Pezinho", preco: 15 }, { nome: "Sobrancelha", preco: 15 }, { nome: "Corte infantil", preco: 35 }
 ];
-const ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.2 8.2 20 18M8.2 15.8 20 6"/></svg>';
 
 /* ---------- Supabase ---------- */
 const CFG = window.CAIXA_CONFIG || {};
@@ -67,13 +66,13 @@ function telaLogin(modo) {
   modo = modo || "entrar";
   $("#shell").hidden = true; const L = $("#login"); L.hidden = false;
   if (!configurado) {
-    L.innerHTML = `<main class="login" style="padding-left:16px;padding-right:16px"><div class="pole">${ICON}</div><h1>Falta configurar</h1>
+    L.innerHTML = `<main class="login" style="padding-left:16px;padding-right:16px"><img class="logo" src="icons/logo.png" alt="Dimas Corts"><h1>Falta configurar</h1>
       <p class="muted">Preencha o arquivo <b>config.js</b> com a Project URL e a chave anon public do Supabase.</p></main>`;
     return;
   }
   L.innerHTML = `<main class="login" style="padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))">
-    <div class="pole">${ICON}</div>
-    <div><div class="eyebrow" style="color:var(--gold)">Caixa da Barbearia</div><h1>${modo === "entrar" ? "Entrar" : "Criar conta"}</h1></div>
+    <img class="logo" src="icons/logo.png" alt="Dimas Corts">
+    <div><div class="eyebrow" style="color:var(--gold)">Caixa da barbearia</div><h1>${modo === "entrar" ? "Entrar" : "Criar conta"}</h1></div>
     <form id="lf" class="stack" novalidate>
       <label class="f">E-mail<input class="input" id="le" type="email" autocomplete="email" required></label>
       <label class="f">Senha<input class="input" id="lp" type="password" autocomplete="${modo === "entrar" ? "current-password" : "new-password"}" minlength="6" required></label>
