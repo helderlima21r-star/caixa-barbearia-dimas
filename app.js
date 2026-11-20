@@ -20,6 +20,13 @@ const DEFAULT_SERVICOS = [
   { nome: "Penteado", preco: 20 }, { nome: "Freestyle", preco: 5 }, { nome: "Alisante", preco: 30 },
   { nome: "Progressiva", preco: 90 }, { nome: "Luzes", preco: 80 }, { nome: "Platinado", preco: 100 }
 ];
+// Produtos da Dimas Corts. O estoque começa em 0 e o barbeiro ajusta na aba Produtos.
+const DEFAULT_PRODUTOS = [
+  ["Pomada tradicional 120g", 25], ["Pomada caramelo 120g", 25], ["Pomada modeladora vitamina E 80g", 15],
+  ["Pomada mousse 70g", 15], ["Pomada matte 60g", 15], ["Óleo de barba 30ml", 25], ["Kit de limpeza facial", 70],
+  ["Máscara facial black", 40], ["Esfoliante facial", 40], ["Creme pós-barba", 35], ["Balm", 35],
+  ["Loção pós-barba", 25], ["Pomada em pó", 25], ["Shampoo 2 em 1", 45]
+].map(([nome, preco]) => ({ nome, preco, estoque: 0, minimo: 2 }));
 // Lista provisória das primeiras versões: quem ainda estiver com ela recebe a tabela acima.
 const SERVICOS_PROVISORIOS = "Corte:40|Barba:30|Corte + barba:60|Pezinho:15|Sobrancelha:15|Corte infantil:35";
 
@@ -34,6 +41,7 @@ const S = { itens: [], produtos: {}, servicos: [], tab: "caixa", periodo: "seman
 const fromRow = r => ({ id: r.id, d: r.dia, h: r.hora, t: r.tipo === "produto" ? "p" : "s", n: r.nome, ref: r.ref, v: Number(r.valor), q: r.qtd, pg: r.pagamento, ex: r.exemplo, mp: r.mp_payment_id || null });
 const prodFromRow = r => ({ id: r.id, nome: r.nome, preco: Number(r.preco), estoque: r.estoque, minimo: r.minimo, ex: r.exemplo });
 
+let configurando = false;
 async function carregarTudo() {
   const since = ymd(addMonths(new Date(), -12));
   const itens = [];
@@ -50,6 +58,12 @@ async function carregarTudo() {
   if (pr.error) throw pr.error; if (sv.error) throw sv.error;
   S.itens = itens;
   S.produtos = Object.fromEntries(pr.data.map(r => [r.id, prodFromRow(r)]));
+  // conta nova: cadastra os produtos da barbearia (uma vez; se já vendeu ou cadastrou algo, não mexe)
+  if (!configurando && !pr.data.some(p => !p.exemplo) && !itens.some(i => i.t === "p" && !i.ex)) {
+    configurando = true;
+    const np = await sb.from("produtos").insert(DEFAULT_PRODUTOS).select();
+    if (!np.error) np.data.forEach(r => { S.produtos[r.id] = prodFromRow(r); });
+  }
   const assinatura = sv.data.map(r => r.nome + ":" + Number(r.preco)).join("|");
   if (sv.data.length && assinatura === SERVICOS_PROVISORIOS) {
     await sb.from("servicos").delete().in("id", sv.data.map(r => r.id));
