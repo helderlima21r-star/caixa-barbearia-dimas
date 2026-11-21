@@ -145,22 +145,23 @@ async function ocupar(fn) {
   document.querySelectorAll("#overlay .btn").forEach(b => b.disabled = true);
   try { await fn(); } catch (e) { erroRede(e); } finally { S.ocupado = false; }
 }
-function registrarServico(serv, valor, pg) {
+function registrarAtendimento(servicos, produtos, pg) {
   return ocupar(async () => {
     const { dia, hora } = agora();
-    const { data, error } = await sb.from("lancamentos").insert({ dia, hora, tipo: "servico", nome: serv.nome, ref: serv.id, valor, qtd: 1, pagamento: pg }).select().single();
-    if (error) throw error;
-    S.itens.push(fromRow(data)); closeSheet(); render(); toast("Registrado: " + serv.nome + " · " + money(valor));
-  });
-}
-function registrarProduto(prod, q, pg) {
-  return ocupar(async () => {
-    const { dia, hora } = agora();
-    const { data, error } = await sb.rpc("vender_produto", { p_produto: prod.id, p_qtd: q, p_pagamento: pg, p_dia: dia, p_hora: hora });
-    if (error) throw error;
-    S.itens.push(fromRow(data));
-    S.produtos[prod.id] = { ...prod, estoque: Math.max(0, prod.estoque - q) };
-    closeSheet(); render(); toast("Registrado: " + prod.nome + " · " + money(prod.preco * q));
+    let total = 0, n = 0;
+    if (servicos.length) {
+      const rows = servicos.map(({ serv, v }) => ({ dia, hora, tipo: "servico", nome: serv.nome, ref: serv.id, valor: v, qtd: 1, pagamento: pg }));
+      const { data, error } = await sb.from("lancamentos").insert(rows).select();
+      if (error) throw error;
+      data.forEach(r => { S.itens.push(fromRow(r)); total += Number(r.valor); n++; });
+    }
+    for (const { prod, q } of produtos) {
+      const { data, error } = await sb.rpc("vender_produto", { p_produto: prod.id, p_qtd: q, p_pagamento: pg, p_dia: dia, p_hora: hora });
+      if (error) { closeSheet(); render(); throw error; }
+      S.itens.push(fromRow(data)); total += prod.preco * q; n += q;
+      S.produtos[prod.id] = { ...prod, estoque: Math.max(0, prod.estoque - q) };
+    }
+    closeSheet(); render(); toast(`Registrado: ${n} ${n === 1 ? "item" : "itens"} · ${money(total)}`);
   });
 }
 function apagarItem(it) {
@@ -283,8 +284,8 @@ function viewCaixa(v) {
       `<div class="empty">Nenhum lançamento ainda hoje.<br>Toque em <b>Serviço</b> depois de cada atendimento.</div>`}</div>
     </section>
     ${!S.itens.length && !Object.keys(S.produtos).length ? `<section class="card stack"><h2>Quer ver os gráficos funcionando?</h2><p class="small muted" style="margin:0">Carregue 6 meses de lançamentos de exemplo. Depois é só remover na aba Serviços.</p><button class="btn ghost full" id="ex-load">Carregar dados de exemplo</button></section>` : ""}`;
-  $("#add-s").onclick = () => sheetServico();
-  $("#add-p").onclick = () => sheetProduto();
+  $("#add-s").onclick = () => sheetAtendimento("servico");
+  $("#add-p").onclick = () => sheetAtendimento("produto");
   const ex = $("#ex-load"); if (ex) ex.onclick = () => { ex.disabled = true; ex.textContent = "Carregando…"; ocupar(async () => { await carregarExemplos(); render(); toast("Exemplos carregados"); }).then(render); };
   v.querySelectorAll(".item").forEach(b => b.onclick = () => { const it = itens.find(x => x.id === b.dataset.id); if (it) sheetItem(it); });
 }
@@ -308,48 +309,55 @@ function bindChips(root, id, on) { root.querySelectorAll("#" + id + " .chip").fo
 const num = s => { const n = parseFloat(String(s || "").replace(/\./g, "").replace(",", ".")); return isFinite(n) ? Math.round(n * 100) / 100 : 0; };
 const fmtIn = v => String(v ?? "").replace(".", ",");
 
-function sheetServico() {
-  let sel = null, pg = "Pix";
-  const lista = S.servicos;
+/* Atendimento: vários serviços e produtos de uma vez, com uma forma de pagamento. */
+function sheetAtendimento(foco) {
+  const servs = S.servicos;
+  const prods = Object.values(S.produtos).sort((a, b) => a.nome.localeCompare(b.nome));
+  const selS = new Map();   // id do serviço -> valor cobrado
+  const selP = new Map();   // id do produto -> quantidade
+  let pg = "Pix";
   openSheet(`
-    <div class="row between"><h2>Registrar serviço</h2><button class="linkbtn" data-close>Fechar</button></div>
-    <div class="tiles">${lista.map(s => `<button class="tile" data-id="${esc(s.id)}" aria-pressed="false"><b>${esc(s.nome)}</b><span class="muted num">${money(s.preco)}</span></button>`).join("")}</div>
-    <div class="grid2">
-      <label class="f">Valor cobrado<input class="input num" id="sv-valor" inputmode="decimal" placeholder="0,00"></label>
-      <div class="f">Pagamento${chipsHtml("sv-pg", pg)}</div>
-    </div>
-    <button class="btn primary full" id="sv-ok" disabled>Escolha um serviço</button>`, root => {
-    const val = root.querySelector("#sv-valor"), ok = root.querySelector("#sv-ok");
-    const upd = () => { const n = num(val.value); ok.disabled = !sel || !(n > 0); ok.textContent = sel ? "Registrar " + money(n) : "Escolha um serviço"; };
-    root.querySelectorAll(".tile").forEach(t => t.onclick = () => {
-      root.querySelectorAll(".tile").forEach(x => x.setAttribute("aria-pressed", "false")); t.setAttribute("aria-pressed", "true");
-      sel = lista.find(s => s.id === t.dataset.id); val.value = fmtIn(sel.preco); upd();
-    });
-    val.oninput = upd; bindChips(root, "sv-pg", v => { pg = v; });
-    ok.onclick = () => registrarServico(sel, num(val.value), pg);
+    <div class="row between"><h2>Novo atendimento</h2><button class="linkbtn" data-close>Fechar</button></div>
+    <div class="eyebrow" id="at-s">Serviços <span class="muted">· toque em quantos quiser</span></div>
+    <div class="tiles">${servs.map(s => `<button class="tile" data-s="${esc(s.id)}" aria-pressed="false"><b>${esc(s.nome)}</b><span class="muted num">${money(s.preco)}</span></button>`).join("")}</div>
+    <div class="eyebrow" id="at-p">Produtos</div>
+    ${prods.length ? `<div class="tiles">${prods.map(p => `<button class="tile" data-p="${esc(p.id)}" aria-pressed="false" ${(p.estoque || 0) <= 0 ? "disabled" : ""}><b>${esc(p.nome)}</b><span class="muted num">${money(p.preco)} · ${p.estoque || 0} em estoque</span></button>`).join("")}</div>`
+      : `<p class="small muted" style="margin:0">Nenhum produto cadastrado. Cadastre na aba Produtos.</p>`}
+    <section class="card" id="at-resumo" hidden>
+      <div class="eyebrow" style="margin-bottom:6px">Resumo</div>
+      <div class="list" id="at-lista"></div>
+    </section>
+    <div class="f">Pagamento${chipsHtml("at-pg", pg)}</div>
+    <button class="btn primary full" id="at-ok" disabled>Escolha serviços ou produtos</button>`, root => {
+    const lista = root.querySelector("#at-lista"), resumo = root.querySelector("#at-resumo"), ok = root.querySelector("#at-ok");
+    const totalAt = () => [...selS.values()].reduce((a, v) => a + v, 0) + [...selP].reduce((a, [id, q]) => a + (S.produtos[id]?.preco || 0) * q, 0);
+    const desenha = () => {
+      root.querySelectorAll("[data-s]").forEach(t => t.setAttribute("aria-pressed", selS.has(t.dataset.s)));
+      root.querySelectorAll("[data-p]").forEach(t => t.setAttribute("aria-pressed", selP.has(t.dataset.p)));
+      const linhas = [];
+      selS.forEach((v, id) => { const s = servs.find(x => x.id === id); linhas.push(`<div class="prod" style="align-items:center"><span><span class="dot s"></span>${esc(s.nome)}</span>
+        <span class="row" style="gap:6px"><input class="input num" data-v="${esc(id)}" inputmode="decimal" value="${fmtIn(v)}" aria-label="Valor de ${esc(s.nome)}" style="width:92px;padding:8px">
+        <button class="linkbtn" data-rs="${esc(id)}" aria-label="Tirar ${esc(s.nome)}" style="color:var(--bad);font-size:20px">×</button></span></div>`); });
+      selP.forEach((q, id) => { const p = S.produtos[id]; linhas.push(`<div class="prod" style="align-items:center"><span><span class="dot p"></span>${esc(p.nome)} <span class="muted small num">${money(p.preco * q)}</span></span>
+        <div class="stepper num"><button data-pm="${esc(id)}" aria-label="Menos">−</button><span>${q}</span><button data-pp="${esc(id)}" aria-label="Mais">+</button></div></div>`); });
+      resumo.hidden = !linhas.length; lista.innerHTML = linhas.join("");
+      const n = selS.size + [...selP.values()].reduce((a, q) => a + q, 0), t = totalAt();
+      ok.disabled = !n || !(t > 0);
+      ok.textContent = n ? `Registrar ${n} ${n === 1 ? "item" : "itens"} · ${money(t)}` : "Escolha serviços ou produtos";
+      lista.querySelectorAll("[data-v]").forEach(i => i.oninput = () => { selS.set(i.dataset.v, num(i.value)); const t2 = totalAt(); ok.disabled = !(t2 > 0); ok.textContent = `Registrar ${n} ${n === 1 ? "item" : "itens"} · ${money(t2)}`; });
+      lista.querySelectorAll("[data-rs]").forEach(b => b.onclick = () => { selS.delete(b.dataset.rs); desenha(); });
+      lista.querySelectorAll("[data-pm]").forEach(b => b.onclick = () => { const q = (selP.get(b.dataset.pm) || 1) - 1; if (q <= 0) selP.delete(b.dataset.pm); else selP.set(b.dataset.pm, q); desenha(); });
+      lista.querySelectorAll("[data-pp]").forEach(b => b.onclick = () => { const max = S.produtos[b.dataset.pp]?.estoque || 0; const q = selP.get(b.dataset.pp) || 0; if (q < max) { selP.set(b.dataset.pp, q + 1); desenha(); } else toast("Só tem " + max + " em estoque"); });
+    };
+    root.querySelectorAll("[data-s]").forEach(t => t.onclick = () => { const s = servs.find(x => x.id === t.dataset.s); if (selS.has(s.id)) selS.delete(s.id); else selS.set(s.id, s.preco); desenha(); });
+    root.querySelectorAll("[data-p]").forEach(t => t.onclick = () => { const id = t.dataset.p; if (selP.has(id)) selP.delete(id); else selP.set(id, 1); desenha(); });
+    bindChips(root, "at-pg", v => { pg = v; });
+    ok.onclick = () => registrarAtendimento([...selS].map(([id, v]) => ({ serv: servs.find(x => x.id === id), v })), [...selP].map(([id, q]) => ({ prod: S.produtos[id], q })), pg);
+    desenha();
+    if (foco === "produto") root.querySelector("#at-p").scrollIntoView({ block: "start" });
   });
 }
 
-function sheetProduto() {
-  const prods = Object.values(S.produtos).sort((a, b) => a.nome.localeCompare(b.nome));
-  if (!prods.length) { openSheet(`<h2>Nenhum produto cadastrado</h2><p class="muted">Cadastre os produtos que você vende, com preço e estoque, na aba Produtos.</p><button class="btn primary full" id="go">Ir para Produtos</button>`, r => r.querySelector("#go").onclick = () => { closeSheet(); S.tab = "produtos"; render(); }); return; }
-  let sel = null, q = 1, pg = "Pix";
-  openSheet(`
-    <div class="row between"><h2>Venda de produto</h2><button class="linkbtn" data-close>Fechar</button></div>
-    <div class="tiles">${prods.map(p => `<button class="tile" data-id="${esc(p.id)}" aria-pressed="false" ${(p.estoque || 0) <= 0 ? "disabled" : ""}><b>${esc(p.nome)}</b><span class="muted num">${money(p.preco)} · ${p.estoque || 0} em estoque</span></button>`).join("")}</div>
-    <div class="row between"><span class="muted small">Quantidade</span><div class="stepper"><button id="qmenos" aria-label="Menos">−</button><span id="q" class="num">1</span><button id="qmais" aria-label="Mais">+</button></div></div>
-    ${chipsHtml("pv-pg", pg)}
-    <button class="btn secondary full" id="pv-ok" disabled>Escolha um produto</button>`, root => {
-    const ok = root.querySelector("#pv-ok"), qel = root.querySelector("#q");
-    const max = () => sel ? Math.max(1, sel.estoque || 0) : 99;
-    const upd = () => { qel.textContent = q; ok.disabled = !sel; ok.textContent = sel ? "Registrar " + money(sel.preco * q) : "Escolha um produto"; };
-    root.querySelectorAll(".tile").forEach(t => t.onclick = () => { root.querySelectorAll(".tile").forEach(x => x.setAttribute("aria-pressed", "false")); t.setAttribute("aria-pressed", "true"); sel = S.produtos[t.dataset.id]; q = Math.min(q, max()); upd(); });
-    root.querySelector("#qmenos").onclick = () => { q = Math.max(1, q - 1); upd(); };
-    root.querySelector("#qmais").onclick = () => { q = Math.min(max(), q + 1); upd(); };
-    bindChips(root, "pv-pg", v => { pg = v; });
-    ok.onclick = () => registrarProduto(sel, q, pg);
-  });
-}
 function sheetItem(it) {
   const classificar = it.t !== "p" && S.servicos.length;
   openSheet(`<h2>${esc(it.n)}</h2>
