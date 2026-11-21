@@ -59,7 +59,7 @@ const S = {
   convs: [], carregando: true,
   aberta: null, msgs: [], carregandoMsgs: false,
   dia: null, ags: [], bloqs: [], agCarregando: false,
-  push: "?"
+  push: "?", abertoHoje: null
 };
 const conv = wa => S.convs.find(c => c.wa_id === wa);
 const esperando = c => !!c.aguardando_desde;
@@ -402,6 +402,8 @@ async function carregarAgenda() {
     sb.from("robo_agendamentos").select("id,wa_id,nome,servico,produtos,inicio,fim,valor,status,expira_em").gte("inicio", de).lt("inicio", ate).in("status", ["confirmado", "reservado"]).order("inicio"),
     sb.from("robo_bloqueios").select("*").gt("fim", de).order("inicio")
   ]);
+  const hojeD = await sb.from("robo_dias").select("aberto").eq("dia", ymdSP(new Date())).maybeSingle();
+  if (!hojeD.error) S.abertoHoje = hojeD.data ? hojeD.data.aberto : null;
   S.agCarregando = false;
   if (a.error || b.error) { toast("Não deu para carregar a agenda."); return; }
   const agora = new Date();
@@ -445,7 +447,16 @@ function viewAgenda(v) {
   }
   itens.sort((x, y) => x.t - y.t);
   const fechado = !DIAS_AGENDA.includes(ds);
-  v.innerHTML = `<div class="dias" id="dias">${chips}</div>
+  const dsHoje = diaSemana(hoje);
+  const aberto = S.abertoHoje === null ? dsHoje >= 2 && dsHoje <= 6 : S.abertoHoje;
+  v.innerHTML = `<section class="card stack" style="gap:10px">
+      <div class="row between"><h2>Hoje</h2><span class="small muted">o robô avisa os clientes</span></div>
+      <div class="seg" style="grid-template-columns:1fr 1fr">
+        <button data-aberto="1" aria-pressed="${aberto}">💈 Aberto hoje</button>
+        <button data-aberto="0" aria-pressed="${!aberto}">🚫 Fechado hoje</button>
+      </div>
+    </section>
+    <div class="dias" id="dias">${chips}</div>
     <section class="card stack">
       <div class="row between"><h2>${esc(cap(fmtDia.format(instante(S.dia, "12:00"))))}</h2><span class="small muted">${ags.length} cliente${ags.length === 1 ? "" : "s"}</span></div>
       ${fechado ? `<p class="small muted" style="margin:0">${ds === 5 || ds === 6 ? "Sexta e sábado são por ordem de chegada: o robô não marca horário." : "Dia sem agenda: o robô não marca horário."}</p>` : ""}
@@ -457,6 +468,13 @@ function viewAgenda(v) {
   v.querySelectorAll("[data-wa]").forEach(b => b.onclick = () => abrirConversa(b.dataset.wa));
   v.querySelectorAll("[data-desbloq]").forEach(b => b.onclick = () => desbloquear(b.dataset.desbloq, b));
   $("#bloquear").onclick = () => folhaBloqueio(S.dia);
+  v.querySelectorAll("[data-aberto]").forEach(b => b.onclick = async () => {
+    const valor = b.dataset.aberto === "1";
+    const antes = S.abertoHoje; S.abertoHoje = valor; render();
+    const { error } = await sb.from("robo_dias").upsert({ dia: ymdSP(new Date()), aberto: valor, atualizado_em: new Date().toISOString() });
+    if (error) { S.abertoHoje = antes; render(); toast("Não deu para salvar. Tente de novo."); return; }
+    toast(valor ? "Pronto: o robô vai dizer que a barbearia está aberta hoje." : "Pronto: o robô vai avisar que hoje está fechado.");
+  });
   const sel = v.querySelector('.dia[aria-pressed="true"]'); if (sel) sel.scrollIntoView({ inline: "center", block: "nearest" });
 }
 
