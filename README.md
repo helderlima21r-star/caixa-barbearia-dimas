@@ -41,6 +41,9 @@ Abra o site no celular e:
 
 A função `supabase/functions/mp-sync` consulta as orders da conta Mercado Pago (API de Orders) a cada 2 minutos e lança no Caixa cada order paga. Se a `external_reference` começar com o nome de um serviço (ex.: "Corte|a1b2"), ele já entra classificado; senão entra como "A classificar" e o barbeiro escolhe o serviço com um toque.
 
+- **Combos:** separe os serviços com `+` (ex.: "Corte + Barba|a1b2"). Cada serviço vira um lançamento próprio, e o valor pago é dividido pelo preço de cada um na aba Serviços (ex.: R$ 55 vira Corte R$ 35 e Barba R$ 20). Se algum nome não for reconhecido, entra um lançamento só, "A classificar", com o total.
+- **Estornos:** quando uma order é devolvida (estorno total) em até 14 dias, os lançamentos dela saem do Caixa sozinhos.
+
 Configuração:
 1. No Mercado Pago do barbeiro: [Suas integrações](https://www.mercadopago.com.br/developers/panel/app) → criar aplicação → *Credenciais de produção* → copiar o **Access Token**.
 2. No Supabase: *Edge Functions → Secrets*, criar `MP_ACCESS_TOKEN` (o Access Token), `SYNC_SECRET` (uma senha qualquer, longa) e `CAIXA_OWNER_EMAIL` (o e-mail da conta do barbeiro no app).
