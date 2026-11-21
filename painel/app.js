@@ -399,7 +399,7 @@ async function carregarAgenda() {
   const ate = instante(somarDias(ymdSP(new Date()), 21), "00:00").toISOString();
   S.agCarregando = true; if (S.tab === "agenda") render();
   const [a, b] = await Promise.all([
-    sb.from("robo_agendamentos").select("id,wa_id,nome,servico,inicio,fim,valor,status,expira_em").gte("inicio", de).lt("inicio", ate).in("status", ["confirmado", "reservado"]).order("inicio"),
+    sb.from("robo_agendamentos").select("id,wa_id,nome,servico,produtos,inicio,fim,valor,status,expira_em").gte("inicio", de).lt("inicio", ate).in("status", ["confirmado", "reservado"]).order("inicio"),
     sb.from("robo_bloqueios").select("*").gt("fim", de).order("inicio")
   ]);
   S.agCarregando = false;
@@ -428,7 +428,7 @@ function viewAgenda(v) {
         <div class="h">${esc(hora(a.inicio))}<small>até ${esc(hora(a.fim))}</small></div>
         <div class="n">${esc(a.nome || telefone(a.wa_id))}</div>
         <button class="linkbtn" data-wa="${esc(a.wa_id)}">Conversa</button>
-        <div class="s">${esc(a.servico)} · ${esc(BRL.format(a.valor))} ${a.status === "reservado" ? `<b class="pill warn">esperando o Pix</b>` : `<b class="pill ok">pago</b>`}</div>
+        <div class="s">${esc(a.servico)}${(a.produtos || []).length ? ` + 🛍️ ${esc(a.produtos.map(p => p.nome).join(", "))}` : ""} · ${esc(BRL.format(a.valor))} ${a.status === "reservado" ? `<b class="pill warn">esperando o Pix</b>` : `<b class="pill ok">pago</b>`}</div>
       </div>` })),
     ...bls.map(b => {
       const diaTodo = new Date(b.inicio) <= instante(S.dia, "00:00") && new Date(b.fim) >= instante(somarDias(S.dia, 1), "00:00");
