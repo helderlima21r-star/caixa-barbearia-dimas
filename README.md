@@ -46,3 +46,14 @@ Configuração:
 2. No Supabase: *Edge Functions → Secrets*, criar `MP_ACCESS_TOKEN` (o Access Token), `SYNC_SECRET` (uma senha qualquer, longa) e `CAIXA_OWNER_EMAIL` (o e-mail da conta do barbeiro no app).
 3. *Edge Functions → Deploy a new function → Via Editor*, nome `mp-sync`, colar `supabase/functions/mp-sync/index.ts`, desligar *Verify JWT* e publicar.
 4. *SQL Editor*: colar `supabase/mp-sync.sql`, trocar `CHAVE_SECRETA_DO_SYNC` pelo mesmo valor de `SYNC_SECRET` e rodar.
+
+## Painel do robô do WhatsApp (`painel/`)
+
+Página separada em `/painel/` para o barbeiro ver e responder as conversas do robô de agendamento
+(repositório `robo-barbearia`), ver a agenda e bloquear dias ou horários. Usa o mesmo login e o mesmo Supabase do Caixa.
+Só entra quem está na tabela `robo_admins` (a conta dona do Caixa já entra).
+
+- Avisos no celular (notificação) quando um cliente toca "Falar com o Dimas". No iPhone, o painel precisa estar na tela inicial
+  (Compartilhar → Adicionar à Tela de Início) para os avisos funcionarem.
+- O banco e a função `painel` ficam no repositório do robô (`supabase/migrations/20261121000000_painel.sql` e `supabase/functions/painel`).
+- O Caixa tem um botão "Abrir o painel do robô" na aba Serviços.
