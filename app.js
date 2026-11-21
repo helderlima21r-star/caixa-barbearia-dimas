@@ -524,6 +524,7 @@ function viewAjustes(v) {
       <div class="grid2" style="margin-top:14px"><button class="btn ghost" id="sadd">+ Serviço</button><button class="btn primary" id="ssave">Salvar preços</button></div>
     </section>
     ${temExemplo() ? `<section class="card stack"><h2>Dados de exemplo</h2><p class="small muted" style="margin:0">Os lançamentos marcados como exemplo servem só para ver os gráficos funcionando. Remova antes de começar a usar de verdade.</p><button class="btn danger full" id="rmex">Remover dados de exemplo</button></section>` : ""}
+    <section class="card stack"><h2>Robô do WhatsApp</h2><p class="small muted" style="margin:0">Conversas com os clientes, agenda e bloqueio de horários.</p><a class="btn secondary full" href="painel/" style="text-decoration:none">Abrir o painel do robô</a></section>
     <section class="card stack"><h2>Conta</h2><p class="small muted" style="margin:0">Conectado como <b>${esc(S.user?.email || "")}</b>. Os dados ficam salvos no servidor e aparecem em qualquer celular em que você entrar com essa conta.</p><button class="btn ghost full" id="sair">Sair</button></section>`;
   const lerLista = () => lista.map((s, i) => ({ id: s.id, nome: ($("#sn-" + i)?.value || "").trim(), preco: num($("#sp-" + i)?.value) })).filter(s => s.nome);
   $("#sadd").onclick = () => { S.servicos = [...lerLista(), { id: null, nome: "Novo serviço", preco: 0 }]; render(); };
