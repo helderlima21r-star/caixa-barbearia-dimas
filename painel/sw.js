@@ -1,5 +1,5 @@
 // Painel do robô: guarda os arquivos para abrir rápido e mostra os avisos (notificações) no celular.
-const CACHE = "painel-v1";
+const CACHE = "painel-v2";
 const FILES = ["./", "index.html", "painel.css", "app.js", "manifest.webmanifest", "../style.css", "../config.js", "../vendor/supabase-2.119.0.js", "../icons/logo-topo.png", "../icons/logo.png", "icons/icon-192.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith("painel-") && k !== CACHE).map(k => caches.delete(k))))); self.clients.claim(); });
