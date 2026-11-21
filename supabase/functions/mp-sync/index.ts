@@ -80,6 +80,32 @@ Deno.serve(async (req) => {
     return new Response(String((e as Error).message), { status: 502 });
   }
 
+  // Cartão pelo robô (Checkout Pro): não é order. O robô guarda "pay:<id do pagamento>" no agendamento;
+  // cada pagamento vira um objeto no formato de order, com id "pay:<id>", e entra pelo mesmo caminho.
+  try {
+    const desdeCartao = new Date(Date.now() - 15 * 24 * 3600 * 1000).toISOString();
+    const { data: agsCartao } = await admin.from("robo_agendamentos").select("mp_order_id")
+      .like("mp_order_id", "pay:%").gte("criado_em", desdeCartao);
+    for (const a of agsCartao || []) {
+      const pid = String(a.mp_order_id).slice(4);
+      const r = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(pid)}`, {
+        headers: { Authorization: `Bearer ${Deno.env.get("MP_ACCESS_TOKEN")}` },
+      });
+      if (!r.ok) continue;
+      const p = await r.json();
+      const comoOrder = {
+        id: `pay:${pid}`, external_reference: p.external_reference,
+        last_updated_date: p.date_approved || p.date_created, created_date: p.date_created,
+        total_paid_amount: p.transaction_amount,
+        transactions: { payments: [{ payment_method: { type: p.payment_type_id } }] },
+      };
+      if (p.status === "approved") orders.push({ ...comoOrder, status: "processed", status_detail: "accredited" });
+      else if (p.status === "refunded" || p.status === "charged_back") estornadas.push(comoOrder);
+    }
+  } catch (e) {
+    console.error("cartao do robo", e);
+  }
+
   // Cada lançamento guarda o id da order; num combo, as partes ficam "id#1", "id#2"...
   const idsPossiveis = orders.flatMap((o) => { const id = String(o.id); return [id, `${id}#1`]; });
   const { data: ja } = await admin.from("lancamentos").select("mp_payment_id").in("mp_payment_id", idsPossiveis.length ? idsPossiveis : ["-"]);
