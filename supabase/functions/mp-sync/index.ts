@@ -116,10 +116,16 @@ Deno.serve(async (req) => {
 
   // Produtos que o cliente pediu no robô, pela order do Mercado Pago.
   const pedidos = new Map<string, any[]>();
+  // Serviço do agendamento do robô (ex.: "Corte + Barba"). A API de produção só aceita letras,
+  // números, - e _ na external_reference, então o robô manda lá só o código da reserva.
+  const servicoDoRobo = new Map<string, string>();
   const idsOrders = orders.map((o) => String(o.id));
   if (idsOrders.length) {
-    const { data: ags } = await admin.from("robo_agendamentos").select("mp_order_id,produtos").in("mp_order_id", idsOrders);
-    for (const a of ags || []) if (Array.isArray(a.produtos) && a.produtos.length) pedidos.set(String(a.mp_order_id), a.produtos);
+    const { data: ags } = await admin.from("robo_agendamentos").select("mp_order_id,servico,produtos").in("mp_order_id", idsOrders);
+    for (const a of ags || []) {
+      if (Array.isArray(a.produtos) && a.produtos.length) pedidos.set(String(a.mp_order_id), a.produtos);
+      if (a.servico) servicoDoRobo.set(String(a.mp_order_id), String(a.servico));
+    }
   }
 
   const novos: any[] = [];
@@ -128,7 +134,7 @@ Deno.serve(async (req) => {
     if (vistos.has(id) || o.status !== "processed" || o.status_detail !== "accredited") continue;
     // o robô coloca o nome do serviço na external_reference (ex.: "Corte|a1b2c3" ou "Corte + Barba|a1b2c3")
     // com produtos, o robô usa "Corte + Barba + Produtos|a1b2c3"
-    const nomes = String(o.external_reference || "").split("|")[0].split("+")
+    const nomes = String(servicoDoRobo.get(id) ?? o.external_reference ?? "").split("|")[0].split("+")
       .map((x) => norm(x.replace(/[-_]/g, " "))).filter((x) => x && x !== "produtos");
     const achados = nomes.map((n) => acharServico(lista, n));
     const pg = o.transactions?.payments?.[0] || {};
