@@ -141,3 +141,6 @@ nav.tabs button[aria-current="page"]{color:var(--accent)}
 .login h1{font-size:34px}
 .erro{color:var(--bad);font-size:14px;min-height:1.2em}
 .vendor-note{font-size:12px;color:var(--muted);text-align:center}
+
+/* atendimento com vários itens: botão de registrar sempre visível */
+#at-ok{position:sticky;bottom:0;z-index:2;box-shadow:0 -10px 18px var(--surface)}
